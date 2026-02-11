@@ -43,4 +43,73 @@ def main():
     st.write(
         """
         This application predicts the **class of Dry Beans**
-        using multiple Machine Learn
+        using multiple Machine Learning models.
+        """
+    )
+
+    # Load models only when app starts
+    models = load_models()
+    label_encoder = models["Label Encoder"]
+
+    # Feature names (from Dry Bean Dataset)
+    feature_names = [
+        "Area", "Perimeter", "MajorAxisLength", "MinorAxisLength",
+        "AspectRation", "Eccentricity", "ConvexArea", "EquivDiameter",
+        "Extent", "Solidity", "roundness", "Compactness",
+        "ShapeFactor1", "ShapeFactor2", "ShapeFactor3", "ShapeFactor4"
+    ]
+
+    st.sidebar.header("🔢 Input Features")
+
+    # User inputs
+    user_input = []
+    for feature in feature_names:
+        value = st.sidebar.number_input(
+            label=feature,
+            min_value=0.0,
+            value=1.0,
+            step=0.1
+        )
+        user_input.append(value)
+
+    input_array = np.array(user_input).reshape(1, -1)
+
+    # Model selection
+    st.sidebar.header("🤖 Select Model")
+    model_name = st.sidebar.selectbox(
+        "Choose a model:",
+        [
+            "Random Forest",
+            "Logistic Regression",
+            "Decision Tree",
+            "KNN",
+            "Naive Bayes",
+            "XGBoost"
+        ]
+    )
+
+    if st.button("🔍 Predict"):
+        model = models[model_name]
+
+        prediction_encoded = model.predict(input_array)[0]
+        prediction_label = label_encoder.inverse_transform([prediction_encoded])[0]
+
+        st.success(f"### ✅ Predicted Dry Bean Class: **{prediction_label}**")
+
+        # Show probabilities if available
+        if hasattr(model, "predict_proba"):
+            probs = model.predict_proba(input_array)[0]
+            prob_df = pd.DataFrame({
+                "Class": label_encoder.classes_,
+                "Probability": probs
+            }).sort_values(by="Probability", ascending=False)
+
+            st.subheader("📊 Prediction Probabilities")
+            st.dataframe(prob_df, use_container_width=True)
+
+
+# -----------------------------
+# Run app
+# -----------------------------
+if __name__ == "__main__":
+    main()
