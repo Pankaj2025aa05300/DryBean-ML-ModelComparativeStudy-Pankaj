@@ -1,122 +1,118 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import pickle
+import os
 
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
-
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.ensemble import RandomForestClassifier
-
-# -----------------------------
-# Page config
-# -----------------------------
-st.set_page_config(page_title="Dry Bean Classification", layout="wide")
-
-st.title("🌱 Dry Bean Classification App")
-st.write("Upload the Dry Bean dataset and train multiple ML models.")
-
-# -----------------------------
-# File uploader
-# -----------------------------
-uploaded_file = st.file_uploader(
-    "Upload Dry Bean Dataset (CSV or Excel)",
-    type=["csv", "xlsx"]
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    matthews_corrcoef,
+    confusion_matrix,
+    classification_report
 )
 
-if uploaded_file is not None:
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-    # -----------------------------
-    # Load dataset
-    # -----------------------------
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+# ----------------------------------
+# Page Config
+# ----------------------------------
+st.set_page_config(
+    page_title="Dry Bean Classification",
+    layout="wide"
+)
+
+st.title("Dry Bean Classification – ML Model Comparison")
+st.write("Upload test data and select a trained model to evaluate performance.")
+
+# ----------------------------------
+# Load Models & Encoder
+# ----------------------------------
+@st.cache_resource
+def load_models():
+    models = {
+        "Logistic Regression": pickle.load(open("models/logistic_regression.pkl", "rb")),
+        "Decision Tree": pickle.load(open("models/decision_tree.pkl", "rb")),
+        "KNN": pickle.load(open("models/knn.pkl", "rb")),
+        "Naive Bayes": pickle.load(open("models/naive_bayes.pkl", "rb")),
+        "Random Forest": pickle.load(open("models/random_forest.pkl", "rb")),
+        "XGBoost": pickle.load(open("models/xgboost.pkl", "rb")),
+    }
+    label_encoder = pickle.load(open("models/label_encoder.pkl", "rb"))
+    return models, label_encoder
+
+models, label_encoder = load_models()
+
+# ----------------------------------
+# Sidebar
+# ----------------------------------
+st.sidebar.header("User Input")
+
+model_name = st.sidebar.selectbox(
+    "Select ML Model",
+    list(models.keys())
+)
+
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Test Dataset (CSV)",
+    type=["csv"]
+)
+
+# ----------------------------------
+# Main Logic
+# ----------------------------------
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
 
     st.subheader("Dataset Preview")
     st.dataframe(df.head())
 
-    # -----------------------------
-    # Basic cleaning
-    # -----------------------------
-    df = df.dropna()
-    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
-
     if "Class" not in df.columns:
-        st.error("❌ Dataset must contain a 'Class' column")
-        st.stop()
+        st.error("❌ Uploaded dataset must contain 'Class' column")
+    else:
+        X_test = df.drop("Class", axis=1)
+        y_test = df["Class"]
 
-    # -----------------------------
-    # Features & target
-    # -----------------------------
-    X = df.drop("Class", axis=1)
-    y = df["Class"]
+        model = models[model_name]
+        y_pred = model.predict(X_test)
 
-    # Keep only numeric features
-    X = X.select_dtypes(include=[np.number])
+        # ----------------------------------
+        # Metrics
+        # ----------------------------------
+        accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred, average="weighted")
+        recall = recall_score(y_test, y_pred, average="weighted")
+        f1 = f1_score(y_test, y_pred, average="weighted")
+        mcc = matthews_corrcoef(y_test, y_pred)
 
-    # Encode target labels
-    le = LabelEncoder()
-    y = le.fit_transform(y)
+        st.subheader("Evaluation Metrics")
 
-    # -----------------------------
-    # Train-test split
-    # -----------------------------
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Accuracy", f"{accuracy:.4f}")
+        col1.metric("Precision", f"{precision:.4f}")
 
-    # -----------------------------
-    # Model selection
-    # -----------------------------
-    model_name = st.selectbox(
-        "Select Machine Learning Model",
-        (
-            "Logistic Regression",
-            "Decision Tree",
-            "K-Nearest Neighbors",
-            "Naive Bayes",
-            "Random Forest",
-        ),
-    )
+        col2.metric("Recall", f"{recall:.4f}")
+        col2.metric("F1 Score", f"{f1:.4f}")
 
-    if model_name == "Logistic Regression":
-        model = LogisticRegression(max_iter=1000)
+        col3.metric("MCC", f"{mcc:.4f}")
 
-    elif model_name == "Decision Tree":
-        model = DecisionTreeClassifier(random_state=42)
+        # ----------------------------------
+        # Confusion Matrix
+        # ----------------------------------
+        st.subheader("Confusion Matrix")
 
-    elif model_name == "K-Nearest Neighbors":
-        model = KNeighborsClassifier(n_neighbors=5)
+        cm = confusion_matrix(y_test, y_pred)
 
-    elif model_name == "Naive Bayes":
-        model = GaussianNB()
+        fig, ax = plt.subplots(figsize=(6, 4))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+        ax.set_xlabel("Predicted Label")
+        ax.set_ylabel("True Label")
+        st.pyplot(fig)
 
-    elif model_name == "Random Forest":
-        model = RandomForestClassifier(random_state=42)
-
-    # -----------------------------
-    # Train model
-    # -----------------------------
-    model.fit(X_train, y_train)
-
-    # -----------------------------
-    # Predictions
-    # -----------------------------
-    y_pred = model.predict(X_test)
-
-    acc = accuracy_score(y_test, y_pred)
-
-    st.subheader("📊 Model Performance")
-    st.write(f"**Accuracy:** {acc:.4f}")
-
-    st.subheader("📄 Classification Report")
-    st.text(classification_report(y_test, y_pred))
-
-else:
-    st.info("⬆️ Please upload the Dry Bean dataset to begin.")
+        # ----------------------------------
+        # Classification Report
+        # ----------------------------------
+        st.subheader("Classification Report")
+        st.text(classification_report(y_test, y_pred))
