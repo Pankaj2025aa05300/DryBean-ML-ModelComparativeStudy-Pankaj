@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 # -----------------------------
-# Load models safely (NO caching, NO top-level loading)
+# Load models safely
 # -----------------------------
 def load_models():
     models = {}
@@ -28,32 +28,23 @@ def load_models():
         models["XGBoost"] = pickle.load(f)
 
     with open("model/label_encoder.pkl", "rb") as f:
-        models["Label Encoder"] = pickle.load(f)
+        label_encoder = pickle.load(f)
 
-    return models
+    with open("model/scaler.pkl", "rb") as f:
+        scaler = pickle.load(f)
+
+    return models, label_encoder, scaler
 
 
 # -----------------------------
-# Main Streamlit App
+# Main App
 # -----------------------------
-import sys
-st.write("Python version:", sys.version)
 def main():
     st.set_page_config(page_title="Dry Bean Classification", layout="wide")
     st.title("🌱 Dry Bean Classification App")
 
-    st.write(
-        """
-        This application predicts the **class of Dry Beans**
-        using multiple Machine Learning models.
-        """
-    )
+    models, label_encoder, scaler = load_models()
 
-    # Load models only when app starts
-    models = load_models()
-    label_encoder = models["Label Encoder"]
-
-    # Feature names (from Dry Bean Dataset)
     feature_names = [
         "Area", "Perimeter", "MajorAxisLength", "MinorAxisLength",
         "AspectRation", "Eccentricity", "ConvexArea", "EquivDiameter",
@@ -63,42 +54,33 @@ def main():
 
     st.sidebar.header("🔢 Input Features")
 
-    # User inputs
     user_input = []
     for feature in feature_names:
-        value = st.sidebar.number_input(
-            label=feature,
-            min_value=0.0,
-            value=1.0,
-            step=0.1
-        )
+        value = st.sidebar.number_input(feature, min_value=0.0, value=1.0)
         user_input.append(value)
 
     input_array = np.array(user_input).reshape(1, -1)
 
-    # Model selection
     st.sidebar.header("🤖 Select Model")
     model_name = st.sidebar.selectbox(
         "Choose a model:",
-        [
-            "Random Forest",
-            "Logistic Regression",
-            "Decision Tree",
-            "KNN",
-            "Naive Bayes",
-            "XGBoost"
-        ]
+        list(models.keys())
     )
 
     if st.button("🔍 Predict"):
         model = models[model_name]
 
+        # Scale only if required
+        if model_name in ["Logistic Regression", "KNN"]:
+            input_array = scaler.transform(input_array)
+
         prediction_encoded = model.predict(input_array)[0]
-        prediction_label = label_encoder.inverse_transform([prediction_encoded])[0]
+        prediction_label = label_encoder.inverse_transform(
+            [prediction_encoded]
+        )[0]
 
         st.success(f"### ✅ Predicted Dry Bean Class: **{prediction_label}**")
 
-        # Show probabilities if available
         if hasattr(model, "predict_proba"):
             probs = model.predict_proba(input_array)[0]
             prob_df = pd.DataFrame({
@@ -111,7 +93,7 @@ def main():
 
 
 # -----------------------------
-# Run app
+# Run App
 # -----------------------------
 if __name__ == "__main__":
     main()
