@@ -57,7 +57,6 @@ model_options = {
     "Random Forest": os.path.join(BASE_DIR, "model", "saved_models", "random_forest.pkl"),
     "XGBoost": os.path.join(BASE_DIR, "model", "saved_models", "xgboost.pkl")
 }
-}
 
 selected_model_name = st.selectbox("Select Model", list(model_options.keys()))
 
