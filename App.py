@@ -81,8 +81,8 @@ if uploaded_file is not None:
         y = df["Class"]
 
 # Encode class labels (same as training logic)
-label_encoder = LabelEncoder()
-y = label_encoder.fit_transform(y)
+        label_encoder = LabelEncoder()
+        y = label_encoder.fit_transform(y)
         # ------------------------------------------------------
         # Load Selected Model
         # ------------------------------------------------------
